@@ -1,0 +1,11 @@
+streamlit
+xarray
+netcdf4
+rioxarray
+folium
+streamlit-folium
+numpy
+matplotlib
+pandas
+pyarrow
+Pillow
