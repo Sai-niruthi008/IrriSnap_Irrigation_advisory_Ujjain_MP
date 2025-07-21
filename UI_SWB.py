@@ -182,4 +182,3 @@ with st.container():
         )
     else:
         st.info("🖱️ **Click on the map** to see the time-series chart for that pixel.")
- which i uploaded on the github
