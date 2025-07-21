@@ -105,8 +105,8 @@ def create_timeseries_chart(df, lat, lon):
     # Plot irrigation as stems for better visibility
     irrig_mask = df["Irrigation"] > 0
     ax2.stem(df.index[irrig_mask], df["Irrigation"][irrig_mask], 
-             linefmt='-c', markerfmt='co', basefmt=" ", 
-             label="Irrigation (mm)", use_line_collection=True)
+             linefmt='c-', markerfmt='co', basefmt=" ", 
+             label="Irrigation (mm)")
 
     # Stress zone visualization
     ax1.axhline(FC, color='blue', linestyle='--', linewidth=1.5, label="Field Capacity")
@@ -127,9 +127,9 @@ def create_timeseries_chart(df, lat, lon):
     # Unified legend
     h1, l1 = ax1.get_legend_handles_labels()
     h2, l2 = ax2.get_legend_handles_labels()
-    ax1.legend(h1 + h2, l1 + l2, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=4)
+    fig.legend(h1 + h2, l1 + l2, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=5, frameon=True)
     
-    fig.tight_layout(rect=[0, 0, 1, 0.96]) # Adjust for suptitle
+    fig.tight_layout(rect=[0, 0.05, 1, 0.96]) # Adjust for suptitle and legend
     return fig
 
 # ======================================================================================
@@ -168,7 +168,13 @@ with map_col:
     
     # Create and display the map
     folium_map = create_map(da_map, layer_to_map)
-    map_output = st_folium(folium_map, height=600, width='100%', returned_objects=[])
+    # ⭐️⭐️⭐️ THE FIX IS HERE ⭐️⭐️⭐️
+    map_output = st_folium(
+        folium_map, 
+        height=600, 
+        width='100%', 
+        returned_objects=['last_clicked']
+    )
 
 # --- Analysis Column ---
 with chart_col:
