@@ -125,87 +125,65 @@ map_output = st_folium(m, height=600, width='100%')
 # ======================================================================================
 # 5. PIXEL-WISE TIME-SERIES CHART
 # ======================================================================================
-if map_output and map_output.get("last_clicked"):
-    clicked = map_output["last_clicked"]
-    lat_click, lon_click = clicked["lat"], clicked["lng"]
+with st.container():
+    map_output = st_folium(m, height=600, width='100%')
 
-    st.subheader(
-        f"📊 Daily Water Balance at Location ({lat_click:.4f}, {lon_click:.4f})"
-    )
+    if map_output and map_output.get("last_clicked"):
+        clicked = map_output["last_clicked"]
+        lat_click, lon_click = clicked["lat"], clicked["lng"]
 
-    pixel = ds.sel(x=lon_click, y=lat_click, method="nearest")
-    df = pd.DataFrame(index=pd.to_datetime(ds.time.values))
-    for var in temporal_vars:
-        df[var] = pixel[var].values
+        st.markdown("---")
+        st.subheader(
+            f"📊 Daily Water Balance at Location ({lat_click:.4f}, {lon_click:.4f})"
+        )
 
-    fig, ax1 = plt.subplots(figsize=(18, 6))
-    ax2 = ax1.twinx()
+        pixel = ds.sel(x=lon_click, y=lat_click, method="nearest")
+        df = pd.DataFrame(index=pd.to_datetime(ds.time.values))
+        for var in temporal_vars:
+            df[var] = pixel[var].values
 
-    # Plot lines
-    ax1.plot(df.index, df["SoilWater"], label="Soil Water (mm)", linewidth=2.5)
-    ax2.plot(df.index, df["ETc"], label="ETc (mm/day)", linewidth=2)
-    ax2.plot(
-        df.index, df["Irrigation"], label="Irrigation (mm)",
-        linestyle='--', linewidth=2
-    )
-    bars = ax2.bar(
-        df.index, df["Precip"], width=0.8, label="Precip (mm)", alpha=0.6
-    )
+        fig, ax1 = plt.subplots(figsize=(18, 6))
+        ax2 = ax1.twinx()
 
-    # Annotate irrigation points
-    for x, y in zip(df.index, df["Irrigation"]):
-        if y > 0:
-            ax2.annotate(
-                f"{y:.1f}", (x, y), textcoords="offset points", xytext=(0,5),
-                ha='center', fontsize=8
-            )
+        ax1.plot(df.index, df["SoilWater"], label="Soil Water (mm)", linewidth=2.5)
+        ax2.plot(df.index, df["ETc"], label="ETc (mm/day)", linewidth=2)
+        ax2.plot(df.index, df["Irrigation"], label="Irrigation (mm)", linestyle='--', linewidth=2)
+        bars = ax2.bar(df.index, df["Precip"], width=0.8, label="Precip (mm)", alpha=0.6)
 
-    # Reference lines and fill zones
-    ax1.axhline(FC, linestyle='--', linewidth=2, label="Field Capacity (mm)")
-    ax1.axhline(WP, linestyle='--', linewidth=2, label="Wilting Point (mm)")
-    ax1.fill_between(
-        df.index, FC, FC*1.1, color='powderblue', alpha=0.3
-    )
-    ax1.fill_between(
-        df.index, WP, FC, color='lightgreen', alpha=0.3
-    )
-    ax1.fill_between(
-        df.index, 0, WP, color='lightcoral', alpha=0.3
-    )
+        for x, y in zip(df.index, df["Irrigation"]):
+            if y > 0:
+                ax2.annotate(f"{y:.1f}", (x, y), textcoords="offset points", xytext=(0, 5), ha='center', fontsize=8)
 
-    # Formatting
-    ax1.set_xlabel("Date", fontsize=12)
-    ax1.set_ylabel("Soil Water (mm)", fontsize=12, color="darkgreen")
-    ax2.set_ylabel("ETc / Precip / Irrigation (mm)", fontsize=12)
-    ax1.tick_params(axis='y', labelcolor="darkgreen")
-    ax1.grid(True, linestyle='--', alpha=0.6)
-    fig.suptitle(
-        "Daily Soil-Water Balance & Moisture Zones (Rabi 2023-24)",
-        fontsize=16, weight='bold'
-    )
+        ax1.axhline(FC, linestyle='--', linewidth=2, label="Field Capacity (mm)")
+        ax1.axhline(WP, linestyle='--', linewidth=2, label="Wilting Point (mm)")
+        ax1.fill_between(df.index, FC, FC * 1.1, color='powderblue', alpha=0.3)
+        ax1.fill_between(df.index, WP, FC, color='lightgreen', alpha=0.3)
+        ax1.fill_between(df.index, 0, WP, color='lightcoral', alpha=0.3)
 
-    # Combined legend
-    h1, l1 = ax1.get_legend_handles_labels()
-    h2, l2 = ax2.get_legend_handles_labels()
-    fig.legend(
-        h1 + h2, l1 + l2,
-        loc="upper right", bbox_to_anchor=(0.9, 0.9)
-    )
+        ax1.set_xlabel("Date", fontsize=12)
+        ax1.set_ylabel("Soil Water (mm)", fontsize=12, color="darkgreen")
+        ax2.set_ylabel("ETc / Precip / Irrigation (mm)", fontsize=12)
+        ax1.tick_params(axis='y', labelcolor="darkgreen")
+        ax1.grid(True, linestyle='--', alpha=0.6)
+        fig.suptitle("Daily Soil-Water Balance & Moisture Zones (Rabi 2023-24)", fontsize=16, weight='bold')
 
-    st.pyplot(fig)
+        h1, l1 = ax1.get_legend_handles_labels()
+        h2, l2 = ax2.get_legend_handles_labels()
+        fig.legend(h1 + h2, l1 + l2, loc="upper right", bbox_to_anchor=(0.9, 0.9))
 
-    # Download button
-    @st.cache_data
-    def convert_df_to_csv(df_in):
-        return df_in.to_csv(index=True).encode('utf-8')
+        st.pyplot(fig)
 
-    csv_data = convert_df_to_csv(df.round(2))
-    st.download_button(
-        label="📥 Download Time Series as CSV",
-        data=csv_data,
-        file_name=f"swb_timeseries_{lat_click:.4f}_{lon_click:.4f}.csv",
-        mime="text/csv"
-    )
-else:
-    st.info("🖱️ **Click on the map** to see the time-series chart for that pixel.")
+        @st.cache_data
+        def convert_df_to_csv(df_in):
+            return df_in.to_csv(index=True).encode('utf-8')
+
+        csv_data = convert_df_to_csv(df.round(2))
+        st.download_button(
+            label="📥 Download Time Series as CSV",
+            data=csv_data,
+            file_name=f"swb_timeseries_{lat_click:.4f}_{lon_click:.4f}.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("🖱️ **Click on the map** to see the time-series chart for that pixel.")
 
