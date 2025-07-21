@@ -15,7 +15,7 @@ import branca
 # ======================================================================================
 st.set_page_config(
     page_title="Soil Water Balance Dashboard",
-    page_icon="🌾",
+    page_icon="🛰️",
     layout="wide"
 )
 
@@ -27,7 +27,6 @@ def load_data(path):
     """Loads and caches the NetCDF dataset."""
     try:
         ds = xr.open_dataset(path)
-        # --- Define Constants from Dataset Attributes ---
         FC = float(ds.attrs.get("FieldCapacity_mm", 120))
         WP = float(ds.attrs.get("WiltingPoint_mm", 60))
         return ds, FC, WP
@@ -47,7 +46,7 @@ ds, FC, WP = load_data(nc_path)
 # 3. HELPER FUNCTIONS (for Map and Chart Creation)
 # ======================================================================================
 def create_map(data_array, variable_name):
-    """Creates a Folium map with a raster overlay and color legend."""
+    """Creates a Folium map with a raster overlay, multiple base layers, and a legend."""
     lat = data_array.y.values
     lon = data_array.x.values
     bounds = [[lat.min(), lon.min()], [lat.max(), lon.max()]]
@@ -55,20 +54,27 @@ def create_map(data_array, variable_name):
 
     m = folium.Map(location=map_center, zoom_start=8, tiles=None)
 
-    # Add base tile layers
+    # --- Add multiple base tile layers ---
     folium.TileLayer("CartoDB positron", name="Light Map").add_to(m)
     folium.TileLayer("OpenStreetMap", name="Street Map").add_to(m)
+    # --- NEW: Add Google Satellite Hybrid layer ---
+    folium.TileLayer(
+        tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+        attr='Google',
+        name='Satellite Hybrid',
+        overlay=False,
+        control=True
+    ).add_to(m)
+
 
     # Prepare raster data for overlay
     raster_data = np.nan_to_num(data_array.values)
     vmin, vmax = float(raster_data.min()), float(raster_data.max())
     
-    # Use Matplotlib colormap to create an image
     cmap = plt.get_cmap('viridis')
     normed_data = (raster_data - vmin) / (vmax - vmin) if (vmax - vmin) > 0 else np.zeros_like(raster_data)
     img_arr = (cmap(normed_data) * 255).astype(np.uint8)
 
-    # Convert to image for overlay
     img = Image.fromarray(img_arr, 'RGBA')
     buffer = io.BytesIO()
     img.save(buffer, format='PNG')
@@ -82,7 +88,6 @@ def create_map(data_array, variable_name):
         name=f"{variable_name} Layer"
     ).add_to(m)
 
-    # Add color scale legend using Branca
     colormap = branca.colormap.linear.viridis.scale(vmin, vmax)
     colormap.caption = f"{variable_name} (mm)"
     m.add_child(colormap)
@@ -92,56 +97,60 @@ def create_map(data_array, variable_name):
     return m
 
 def create_timeseries_chart(df, lat, lon):
-    """Creates a Matplotlib time-series chart for the selected pixel."""
+    """Creates a Matplotlib time-series chart with irrigation labels."""
     plt.style.use('seaborn-v0_8-whitegrid')
-    fig, ax1 = plt.subplots(figsize=(12, 5)) # Adjusted size for column layout
+    fig, ax1 = plt.subplots(figsize=(12, 5))
     ax2 = ax1.twinx()
 
-    # Plotting data
     ax1.plot(df.index, df["SoilWater"], label="Soil Water (mm)", color='darkgreen', linewidth=2.5, zorder=10)
     ax2.plot(df.index, df["ETc"], label="ETc (mm/day)", color='orangered', linewidth=1.5, zorder=5)
     ax2.bar(df.index, df["Precip"], width=0.8, label="Precip (mm)", color='royalblue', alpha=0.6)
     
-    # Plot irrigation as stems for better visibility
     irrig_mask = df["Irrigation"] > 0
     ax2.stem(df.index[irrig_mask], df["Irrigation"][irrig_mask], 
              linefmt='c-', markerfmt='co', basefmt=" ", 
              label="Irrigation (mm)")
 
-    # Stress zone visualization
+    # --- NEW: Add data labels for irrigation events ---
+    for date, value in df.loc[irrig_mask, "Irrigation"].items():
+        ax2.annotate(f'{value:.1f}',
+                     xy=(date, value),
+                     textcoords="offset points",
+                     xytext=(0, 8),
+                     ha='center',
+                     fontsize=9,
+                     color='darkcyan')
+
     ax1.axhline(FC, color='blue', linestyle='--', linewidth=1.5, label="Field Capacity")
     ax1.axhline(WP, color='red', linestyle='--', linewidth=1.5, label="Wilting Point")
     ax1.fill_between(df.index, WP, FC, color='lightgreen', alpha=0.4, label='Optimal Zone')
     ax1.fill_between(df.index, 0, WP, color='lightcoral', alpha=0.4, label='Stress Zone')
     
-    # Formatting
     ax1.set_xlabel("Date", fontsize=12)
     ax1.set_ylabel("Soil Water (mm)", fontsize=12, color="darkgreen")
     ax2.set_ylabel("Water Flux (mm)", fontsize=12)
     ax1.tick_params(axis='y', labelcolor="darkgreen")
     ax1.set_ylim(bottom=0)
-    ax2.set_ylim(bottom=0)
+    ax2.set_ylim(bottom=0, top=max(df["Irrigation"].max(), df["Precip"].max())*1.5) # Dynamic y-axis for ax2
     
     fig.suptitle(f"Daily Water Balance at ({lat:.4f}, {lon:.4f})", fontsize=16, weight='bold')
     
-    # Unified legend
     h1, l1 = ax1.get_legend_handles_labels()
     h2, l2 = ax2.get_legend_handles_labels()
     fig.legend(h1 + h2, l1 + l2, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=5, frameon=True)
     
-    fig.tight_layout(rect=[0, 0.05, 1, 0.96]) # Adjust for suptitle and legend
+    fig.tight_layout(rect=[0, 0.05, 1, 0.96])
     return fig
 
 # ======================================================================================
 # 4. MAIN APP INTERFACE
 # ======================================================================================
-st.title("🌾 Pixel-wise Soil Water Balance Dashboard")
+st.title("🛰️ Pixel-wise Soil Water Balance Dashboard")
 st.markdown(
     "Select a variable and date from the sidebar to view the spatial map. "
     "**Click on any pixel** on the map to generate a detailed time-series water balance chart for that location."
 )
 
-# --- Sidebar Controls ---
 st.sidebar.header("🗺️ Map Controls")
 temporal_vars = [v for v in ds.data_vars if "time" in ds[v].dims]
 default_idx = temporal_vars.index("ETc") if "ETc" in temporal_vars else 0
@@ -159,16 +168,13 @@ selected_date_str = st.sidebar.select_slider(
 )
 selected_time = pd.to_datetime(selected_date_str)
 
-# --- Main Page Layout (Columns) ---
-map_col, chart_col = st.columns([3, 2]) # 3:2 ratio for map and chart
+map_col, chart_col = st.columns([3, 2])
 
 with map_col:
     st.subheader(f"📍 Map of '{layer_to_map}' for {selected_date_str}")
     da_map = ds[layer_to_map].sel(time=selected_time, method='nearest')
     
-    # Create and display the map
     folium_map = create_map(da_map, layer_to_map)
-    # ⭐️⭐️⭐️ THE FIX IS HERE ⭐️⭐️⭐️
     map_output = st_folium(
         folium_map, 
         height=600, 
@@ -176,7 +182,6 @@ with map_col:
         returned_objects=['last_clicked']
     )
 
-# --- Analysis Column ---
 with chart_col:
     st.subheader("📊 Time-Series Analysis")
     if map_output and map_output.get("last_clicked"):
@@ -185,23 +190,19 @@ with chart_col:
 
         st.markdown(f"**Selected Location:** `{lat_click:.4f}°N, {lon_click:.4f}°E`")
 
-        # Select pixel and create DataFrame
         pixel = ds.sel(x=lon_click, y=lat_click, method="nearest")
         df = pd.DataFrame(index=pd.to_datetime(ds.time.values))
         for var in temporal_vars:
             df[var] = pixel[var].values
 
-        # --- Display Key Metrics ---
         metric_col1, metric_col2, metric_col3 = st.columns(3)
         metric_col1.metric("Total Precip.", f"{df['Precip'].sum():.1f} mm")
         metric_col2.metric("Mean ETc", f"{df['ETc'].mean():.1f} mm/day")
         metric_col3.metric("Total Irrig.", f"{df['Irrigation'].sum():.1f} mm")
 
-        # --- Display Chart ---
         ts_chart = create_timeseries_chart(df, lat_click, lon_click)
         st.pyplot(ts_chart)
 
-        # --- Data Download Expander ---
         with st.expander("📂 View and Download Pixel Data"):
             st.dataframe(df.round(2))
             
