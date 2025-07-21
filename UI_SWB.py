@@ -157,7 +157,7 @@ def create_timeseries_chart(df, lat, lon):
 # ======================================================================================
 # 4. MAIN APP INTERFACE
 # ======================================================================================
-st.title = ( "🌾 Irrisnap Pixel wise Irrigation Advisories Dashboard" )
+st.title("🌾 Irrisnap Pixel wise Irrigation Advisories Dashboard")
 st.markdown(
     "Select a variable and date from the sidebar to view the spatial map. "
     "**Click on any pixel** on the map to generate a detailed time-series water balance chart for that location."
