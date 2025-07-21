@@ -103,9 +103,19 @@ folium.raster_layers.ImageOverlay(
 ).add_to(m)
 
 # Add color scale legend
-colormap = branca.colormap.linear.YlGnBu_09 
+colormaps = {
+    "ETc": branca.colormap.linear.YlGnBu_09,
+    "SoilWater": branca.colormap.linear.YlOrBr_09,
+    "Precip": branca.colormap.linear.Blues_09,
+    "Irrigation": branca.colormap.linear.GnBu_09,
+}
+
+default_cmap = branca.colormap.linear.viridis.scale(vmin, vmax) 
+color_map_base = colormaps.get(layer_to_map, default_cmap)
+colormap = color_map_base.scale(vmin, vmax)
 colormap.caption = f"{layer_to_map} (mm)"
 colormap.add_to(m)
+
 
 # Fit map to bounds and add controls
 m.fit_bounds(bounds)
