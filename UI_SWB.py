@@ -120,8 +120,6 @@ colormap.add_to(m)
 # Fit map to bounds and add controls
 m.fit_bounds(bounds)
 folium.LayerControl().add_to(m)
-map_output = st_folium(m, height=600, width='100%')
-
 # ======================================================================================
 # 5. PIXEL-WISE TIME-SERIES CHART
 # ======================================================================================
