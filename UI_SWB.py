@@ -37,7 +37,6 @@ def load_data(path):
         st.error(f"An error occurred while loading the data: {e}")
         st.stop()
 
-# Load the data
 nc_path = "swb_pixel_wheat_clipped.nc"
 ds, FC, WP = load_data(nc_path)
 
@@ -46,7 +45,7 @@ ds, FC, WP = load_data(nc_path)
 # 3. HELPER FUNCTIONS (for Map and Chart Creation)
 # ======================================================================================
 def create_map(data_array, variable_name):
-    """Creates a Folium map with a raster overlay, multiple base layers, and a legend."""
+    """Creates a Folium map with a transparent raster overlay for NoData values."""
     lat = data_array.y.values
     lon = data_array.x.values
     bounds = [[lat.min(), lon.min()], [lat.max(), lon.max()]]
@@ -54,10 +53,8 @@ def create_map(data_array, variable_name):
 
     m = folium.Map(location=map_center, zoom_start=8, tiles=None)
 
-    # --- Add multiple base tile layers ---
     folium.TileLayer("CartoDB positron", name="Light Map").add_to(m)
     folium.TileLayer("OpenStreetMap", name="Street Map").add_to(m)
-    # --- NEW: Add Google Satellite Hybrid layer ---
     folium.TileLayer(
         tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
         attr='Google',
@@ -66,14 +63,27 @@ def create_map(data_array, variable_name):
         control=True
     ).add_to(m)
 
+    # ===================================================================
+    # --- TRANSPARENCY FIX FOR NODATA APPLIED HERE ---
+    # ===================================================================
+    # 1. Get the raw numpy array, keeping NaNs
+    raster_data = data_array.values
 
-    # Prepare raster data for overlay
-    raster_data = np.nan_to_num(data_array.values)
-    vmin, vmax = float(raster_data.min()), float(raster_data.max())
-    
-    cmap = plt.get_cmap('viridis')
+    # 2. Create a colormap and set 'bad' (NaN) values to be transparent
+    #    Use .copy() to avoid modifying the global colormap instance
+    cmap = plt.get_cmap('viridis').copy()
+    cmap.set_bad(alpha=0)
+
+    # 3. Calculate vmin/vmax ignoring NaNs for accurate color scaling
+    vmin = np.nanmin(raster_data)
+    vmax = np.nanmax(raster_data)
+
+    # 4. Normalize the data. NaNs will be handled by the colormap.
     normed_data = (raster_data - vmin) / (vmax - vmin) if (vmax - vmin) > 0 else np.zeros_like(raster_data)
+    
+    # 5. Apply the colormap. Matplotlib now correctly maps NaNs to transparent.
     img_arr = (cmap(normed_data) * 255).astype(np.uint8)
+    # ===================================================================
 
     img = Image.fromarray(img_arr, 'RGBA')
     buffer = io.BytesIO()
@@ -84,10 +94,11 @@ def create_map(data_array, variable_name):
     folium.raster_layers.ImageOverlay(
         image=image_url,
         bounds=bounds,
-        opacity=0.7,
+        opacity=0.8, # Opacity can be slightly higher now
         name=f"{variable_name} Layer"
     ).add_to(m)
 
+    # Use the vmin/vmax from the actual data for the legend
     colormap = branca.colormap.linear.viridis.scale(vmin, vmax)
     colormap.caption = f"{variable_name} (mm)"
     m.add_child(colormap)
@@ -111,7 +122,6 @@ def create_timeseries_chart(df, lat, lon):
              linefmt='c-', markerfmt='co', basefmt=" ", 
              label="Irrigation (mm)")
 
-    # --- NEW: Add data labels for irrigation events ---
     for date, value in df.loc[irrig_mask, "Irrigation"].items():
         ax2.annotate(f'{value:.1f}',
                      xy=(date, value),
@@ -131,7 +141,9 @@ def create_timeseries_chart(df, lat, lon):
     ax2.set_ylabel("Water Flux (mm)", fontsize=12)
     ax1.tick_params(axis='y', labelcolor="darkgreen")
     ax1.set_ylim(bottom=0)
-    ax2.set_ylim(bottom=0, top=max(df["Irrigation"].max(), df["Precip"].max())*1.5) # Dynamic y-axis for ax2
+    # Dynamic y-axis for ax2 to ensure labels fit
+    ax2_max = max(df["Irrigation"].max(), df["Precip"].max(), df["ETc"].max())
+    ax2.set_ylim(bottom=0, top=ax2_max * 1.25) 
     
     fig.suptitle(f"Daily Water Balance at ({lat:.4f}, {lon:.4f})", fontsize=16, weight='bold')
     
