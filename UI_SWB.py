@@ -14,8 +14,8 @@ import branca
 # 1. PAGE CONFIGURATION
 # ======================================================================================
 st.set_page_config(
-    page_title="Soil Water Balance Dashboard",
-    page_icon="🛰️",
+    page_title="Irrisnap_Irrigation_Advisories",
+    page_icon="🌾",
     layout="wide"
 )
 
